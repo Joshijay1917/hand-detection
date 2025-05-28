@@ -96,68 +96,21 @@
         const statusDiv = document.getElementById('status');
         const permissionHelp = document.getElementById('permissionHelp');
 
-        // Check browser support
-        function checkSupport() {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                statusDiv.textContent = "Error: Camera API not supported in this browser";
-                startButton.disabled = true;
-                return false;
-            }
-            return true;
-        }
+// Check browser support
+function checkSupport() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        statusDiv.textContent = "Error: Camera API not supported in this browser";
+        startButton.disabled = true;
+        return false;
+    }
+    return true;
+}
 
-        // Camera setup function
-        async function setupCamera() {
-            if (!checkSupport()) return false;
+// Event listeners
+startButton.addEventListener('click', setupCamera);
 
-            statusDiv.textContent = "Requesting camera access...";
-            startButton.disabled = true;
-
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
-                        facingMode: 'user'
-                    },
-                    audio: false
-                });
-
-                video.srcObject = stream;
-
-                return new Promise((resolve) => {
-                    video.onloadedmetadata = () => {
-                        video.play();
-                        statusDiv.textContent = "Camera is active!";
-                        startButton.textContent = "Camera Running";
-                        permissionHelp.style.display = 'none';
-                        resolve(true);
-                    };
-                });
-            } catch (err) {
-                console.error("Camera error:", err);
-                statusDiv.textContent = `Error: ${err.name}`;
-                permissionHelp.style.display = 'block';
-
-                if (err.name === 'NotAllowedError') {
-                    statusDiv.textContent = "Error: Camera permission denied";
-                } else if (err.name === 'NotFoundError') {
-                    statusDiv.textContent = "Error: No camera found";
-                } else {
-                    statusDiv.textContent = "Error: Could not access camera";
-                }
-
-                startButton.textContent = "Try Again";
-                startButton.disabled = false;
-                return false;
-            }
-        }
-
-        // Event listeners
-        startButton.addEventListener('click', setupCamera);
-
-        // Initial check
-        window.addEventListener('load', checkSupport);
+// Initial check
+window.addEventListener('load', checkSupport);
 
         // Global variables
         let model;
