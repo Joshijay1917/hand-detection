@@ -2,51 +2,107 @@
 <html>
 <head>
     <title>Hand Gesture Control</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body {
             font-family: Arial, sans-serif;
             text-align: center;
-            margin: 20px;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        #container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         #video {
-            width: 640px;
-            height: 480px;
+            width: 100%;
+            max-width: 640px;
             background: #222;
-            margin: 0 auto;
+            margin: 10px auto;
             display: block;
+            border-radius: 5px;
         }
         #startButton {
-            padding: 10px 20px;
+            padding: 12px 24px;
             font-size: 16px;
-            margin: 20px;
-            background: #4CAF50;
+            margin: 15px;
+            background: #4285f4;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            transition: background 0.3s;
+        }
+        #startButton:hover {
+            background: #3367d6;
+        }
+        #startButton:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
         }
         #status {
-            margin: 10px;
+            margin: 15px;
             font-weight: bold;
+            color: #333;
+            min-height: 20px;
+        }
+        .permission-help {
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff8e1;
+            border-radius: 5px;
+            text-align: left;
         }
     </style>
 </head>
 <body>
-    <h1>Hand Gesture Control</h1>
-    <div id="status">Click Start to begin</div>
-    <video id="video" playsinline></video>
-    <button id="startButton">Start Camera</button>
+    <div id="container">
+        <h1>Hand Gesture Control</h1>
+        <div id="status">Click Start to begin camera access</div>
+        <video id="video" playsinline></video>
+        <button id="startButton">Start Camera</button>
+        
+        <div id="permissionHelp" class="permission-help">
+            <h3>Having trouble with camera access?</h3>
+            <ol>
+                <li>Make sure you've clicked "Allow" when the browser asks for camera permission</li>
+                <li>Check that no other app is using your camera</li>
+                <li>Try refreshing the page</li>
+                <li>Use Chrome or Firefox for best results</li>
+            </ol>
+        </div>
+    </div>
 
     <script>
         const video = document.getElementById('video');
         const startButton = document.getElementById('startButton');
         const statusDiv = document.getElementById('status');
+        const permissionHelp = document.getElementById('permissionHelp');
 
-        // Modern camera access function
+        // Check browser support
+        function checkSupport() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                statusDiv.textContent = "Error: Camera API not supported in this browser";
+                startButton.disabled = true;
+                return false;
+            }
+            return true;
+        }
+
+        // Camera setup function
         async function setupCamera() {
+            if (!checkSupport()) return false;
+            
+            statusDiv.textContent = "Requesting camera access...";
+            startButton.disabled = true;
+            
             try {
-                statusDiv.textContent = "Accessing camera...";
-                
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         width: { ideal: 640 },
@@ -57,41 +113,40 @@
                 });
                 
                 video.srcObject = stream;
-                video.onloadedmetadata = () => {
-                    video.play();
-                    statusDiv.textContent = "Camera is working!";
-                    startButton.textContent = "Camera Active";
-                    startButton.disabled = true;
-                };
                 
-                return true;
+                return new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        statusDiv.textContent = "Camera is active!";
+                        startButton.textContent = "Camera Running";
+                        permissionHelp.style.display = 'none';
+                        resolve(true);
+                    };
+                });
             } catch (err) {
-                statusDiv.textContent = `Error: ${err.name}`;
                 console.error("Camera error:", err);
+                statusDiv.textContent = `Error: ${err.name}`;
+                permissionHelp.style.display = 'block';
+                
+                if (err.name === 'NotAllowedError') {
+                    statusDiv.textContent = "Error: Camera permission denied";
+                } else if (err.name === 'NotFoundError') {
+                    statusDiv.textContent = "Error: No camera found";
+                } else {
+                    statusDiv.textContent = "Error: Could not access camera";
+                }
+                
+                startButton.textContent = "Try Again";
+                startButton.disabled = false;
                 return false;
             }
         }
 
-        // Button click handler
-        startButton.addEventListener('click', async () => {
-            const success = await setupCamera();
-            if (!success) {
-                statusDiv.innerHTML = "Failed to access camera.<br>Make sure you:";
-                statusDiv.innerHTML += "<ul style='text-align: left; display: inline-block;'>";
-                statusDiv.innerHTML += "<li>Are using HTTPS or localhost</li>";
-                statusDiv.innerHTML += "<li>Have granted camera permissions</li>";
-                statusDiv.innerHTML += "<li>Don't have other apps using the camera</li>";
-                statusDiv.innerHTML += "</ul>";
-            }
-        });
-
-        // Check if browser supports mediaDevices
-        window.addEventListener('load', () => {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                statusDiv.textContent = "Camera API not supported in this browser";
-                startButton.disabled = true;
-            }
-        });
+        // Event listeners
+        startButton.addEventListener('click', setupCamera);
+        
+        // Initial check
+        window.addEventListener('load', checkSupport);
     </script>
 </body>
 </html>
