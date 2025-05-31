@@ -77,6 +77,7 @@
         <h1>Hand Gesture Control</h1>
         <div id="status">Click Start to begin camera access</div>
         <video id="video" playsinline></video>
+        <div id="feedback" style="font-size: 24px; margin: 10px; min-height: 30px;"></div>
         <button id="startButton">Start Camera</button>
 
         <div id="permissionHelp" class="permission-help">
@@ -124,50 +125,10 @@
             console.log("HandPose model loaded");
         }
 
-        // Detect hands in video stream
-        async function detectHands() {
-            if (!isHandDetectionRunning) return;
+        // Add these new functions FIRST (before detectHands())
 
-            const predictions = await model.estimateHands(video);
-
-            if (predictions.length > 0) {
-                const hand = predictions[0];
-                const gesture = detectGestures(hand.landmarks);
-
-                statusDiv.textContent = `Gesture: ${gesture}`;
-
-                // Visual feedback
-                drawHand(hand.landmarks);
-
-                // Add your control logic here
-                handleGesture(gesture);
-            } else {
-                statusDiv.textContent = "Show your hand to the camera";
-            }
-
-            requestAnimationFrame(detectHands);
-        }
-
-        function handleGesture(gesture) {
-            // Add your control actions here
-            console.log("Detected gesture:", gesture);
-
-            // Example: Change background color based on gesture
-            const colors = {
-                'thumbs_up': '#4CAF50',
-                'peace_sign': '#2196F3',
-                'open_hand': '#FFC107',
-                'fist': '#F44336'
-            };
-
-            if (colors[gesture]) {
-                document.body.style.backgroundColor = colors[gesture];
-            }
-        }
-
-        // Count extended fingers
+        // 1. Improved Finger Counting
         function countFingers(landmarks) {
-            // Hand landmark connections and finger mappings
             const fingerJoints = {
                 thumb: [0, 1, 2, 3, 4],
                 index: [0, 5, 6, 7, 8],
@@ -181,36 +142,112 @@
             // Check each finger
             for (const finger in fingerJoints) {
                 const points = fingerJoints[finger];
-                const tip = landmarks[points[4]];     // Finger tip
-                const dip = landmarks[points[3]];     // Second joint
-                const pip = landmarks[points[2]];     // First joint
-                const mcp = landmarks[points[1]];     // Knuckle
-
-                // Calculate finger angles for more precision
-                const fingerAngle = calculateAngle(mcp, pip, dip);
+                const tip = landmarks[points[4]];
+                const pip = landmarks[points[2]];
+                const mcp = landmarks[points[1]];
 
                 if (finger === 'thumb') {
-                    // Special handling for thumb
+                    // Special thumb check
                     const thumbAngle = calculateAngle(landmarks[0], landmarks[1], landmarks[2]);
                     if (thumbAngle > 160 && tip[1] < mcp[1]) {
                         fingerCount++;
                     }
                 } else {
+                    const fingerAngle = calculateAngle(mcp, pip, landmarks[points[3]]);
                     if (tip[1] < pip[1] && fingerAngle > 130) {
                         fingerCount++;
                     }
                 }
             }
-
             return fingerCount;
         }
 
-        // Helper function to calculate angle between three points
+        // 2. Angle Calculation Helper
         function calculateAngle(a, b, c) {
             const radians = Math.atan2(c[1] - b[1], c[0] - b[0]) -
                 Math.atan2(a[1] - b[1], a[0] - b[0]);
             let angle = Math.abs(radians * 180 / Math.PI);
             return angle > 180 ? 360 - angle : angle;
+        }
+
+        // 3. Gesture Detection
+        function detectGestures(landmarks) {
+            const fingersUp = countFingers(landmarks);
+            const thumbTip = landmarks[4];
+            const indexTip = landmarks[8];
+            const wrist = landmarks[0];
+
+            // Thumbs Up
+            if (fingersUp === 1 && thumbTip[1] < wrist[1]) {
+                return "thumbs_up";
+            }
+
+            // Peace Sign
+            if (fingersUp === 2 &&
+                landmarks[12][1] < wrist[1] && // Middle finger
+                Math.abs(landmarks[8][0] - landmarks[12][0]) > 30) {
+                return "peace_sign";
+            }
+
+            // Open Hand
+            if (fingersUp === 5) {
+                return "open_hand";
+            }
+
+            // Fist
+            if (fingersUp === 0) {
+                return "fist";
+            }
+
+            return "unknown";
+        }
+
+        // 4. Now the corrected detectHands() function
+        async function detectHands() {
+            if (!isHandDetectionRunning) return;
+
+            try {
+                const predictions = await model.estimateHands(video);
+
+                if (predictions.length > 0) {
+                    const hand = predictions[0];
+                    const gesture = detectGestures(hand.landmarks);
+
+                    statusDiv.textContent = `Detected: ${gesture}`;
+                    drawHand(hand.landmarks);
+                    handleGesture(gesture);
+                } else {
+                    statusDiv.textContent = "Show your hand to the camera";
+                    video.style.backgroundImage = ''; // Clear overlay if no hand
+                }
+            } catch (error) {
+                console.error("Detection error:", error);
+            }
+
+            requestAnimationFrame(detectHands);
+        }
+
+        // 5. Gesture Handler (example implementation)
+        function handleGesture(gesture) {
+            // Add your custom actions here
+            const feedback = document.getElementById('feedback');
+
+            switch (gesture) {
+                case "thumbs_up":
+                    feedback.textContent = "👍 Volume Up";
+                    break;
+                case "peace_sign":
+                    feedback.textContent = "✌️ Channel Up";
+                    break;
+                case "open_hand":
+                    feedback.textContent = "🖐️ Pause";
+                    break;
+                case "fist":
+                    feedback.textContent = "✊ Mute";
+                    break;
+                default:
+                    feedback.textContent = "Gesture: " + gesture;
+            }
         }
 
         // Draw hand landmarks (visual feedback)
