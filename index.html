@@ -96,21 +96,21 @@
         const statusDiv = document.getElementById('status');
         const permissionHelp = document.getElementById('permissionHelp');
 
-// Check browser support
-function checkSupport() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        statusDiv.textContent = "Error: Camera API not supported in this browser";
-        startButton.disabled = true;
-        return false;
-    }
-    return true;
-}
+        // Check browser support
+        function checkSupport() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                statusDiv.textContent = "Error: Camera API not supported in this browser";
+                startButton.disabled = true;
+                return false;
+            }
+            return true;
+        }
 
-// Event listeners
-startButton.addEventListener('click', setupCamera);
+        // Event listeners
+        startButton.addEventListener('click', setupCamera);
 
-// Initial check
-window.addEventListener('load', checkSupport);
+        // Initial check
+        window.addEventListener('load', checkSupport);
 
         // Global variables
         let model;
@@ -128,37 +128,89 @@ window.addEventListener('load', checkSupport);
         async function detectHands() {
             if (!isHandDetectionRunning) return;
 
-            // Get predictions
             const predictions = await model.estimateHands(video);
 
             if (predictions.length > 0) {
                 const hand = predictions[0];
-                const fingersUp = countFingers(hand.landmarks);
-                statusDiv.textContent = `Hand detected! Fingers up: ${fingersUp}`;
+                const gesture = detectGestures(hand.landmarks);
 
-                // Draw hand landmarks (optional)
+                statusDiv.textContent = `Gesture: ${gesture}`;
+
+                // Visual feedback
                 drawHand(hand.landmarks);
+
+                // Add your control logic here
+                handleGesture(gesture);
             } else {
-                statusDiv.textContent = "Camera active - Show your hand";
+                statusDiv.textContent = "Show your hand to the camera";
             }
 
-            // Continue detection loop
             requestAnimationFrame(detectHands);
+        }
+
+        function handleGesture(gesture) {
+            // Add your control actions here
+            console.log("Detected gesture:", gesture);
+
+            // Example: Change background color based on gesture
+            const colors = {
+                'thumbs_up': '#4CAF50',
+                'peace_sign': '#2196F3',
+                'open_hand': '#FFC107',
+                'fist': '#F44336'
+            };
+
+            if (colors[gesture]) {
+                document.body.style.backgroundColor = colors[gesture];
+            }
         }
 
         // Count extended fingers
         function countFingers(landmarks) {
-            // Simplified finger logic (thumb, index, middle, ring, pinky)
-            const fingerTips = [4, 8, 12, 16, 20]; // Landmark indices
-            const fingerBases = [2, 5, 9, 13, 17];
-            let count = 0;
+            // Hand landmark connections and finger mappings
+            const fingerJoints = {
+                thumb: [0, 1, 2, 3, 4],
+                index: [0, 5, 6, 7, 8],
+                middle: [0, 9, 10, 11, 12],
+                ring: [0, 13, 14, 15, 16],
+                pinky: [0, 17, 18, 19, 20]
+            };
 
-            for (let i = 0; i < 5; i++) {
-                if (landmarks[fingerTips[i]][1] < landmarks[fingerBases[i]][1]) {
-                    count++;
+            let fingerCount = 0;
+
+            // Check each finger
+            for (const finger in fingerJoints) {
+                const points = fingerJoints[finger];
+                const tip = landmarks[points[4]];     // Finger tip
+                const dip = landmarks[points[3]];     // Second joint
+                const pip = landmarks[points[2]];     // First joint
+                const mcp = landmarks[points[1]];     // Knuckle
+
+                // Calculate finger angles for more precision
+                const fingerAngle = calculateAngle(mcp, pip, dip);
+
+                if (finger === 'thumb') {
+                    // Special handling for thumb
+                    const thumbAngle = calculateAngle(landmarks[0], landmarks[1], landmarks[2]);
+                    if (thumbAngle > 160 && tip[1] < mcp[1]) {
+                        fingerCount++;
+                    }
+                } else {
+                    if (tip[1] < pip[1] && fingerAngle > 130) {
+                        fingerCount++;
+                    }
                 }
             }
-            return count;
+
+            return fingerCount;
+        }
+
+        // Helper function to calculate angle between three points
+        function calculateAngle(a, b, c) {
+            const radians = Math.atan2(c[1] - b[1], c[0] - b[0]) -
+                Math.atan2(a[1] - b[1], a[0] - b[0]);
+            let angle = Math.abs(radians * 180 / Math.PI);
+            return angle > 180 ? 360 - angle : angle;
         }
 
         // Draw hand landmarks (visual feedback)
@@ -168,15 +220,26 @@ window.addEventListener('load', checkSupport);
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
 
+            // Draw connections
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
+            const connections = handpose.HAND_CONNECTIONS;
+            connections.forEach(([startIdx, endIdx]) => {
+                ctx.beginPath();
+                ctx.moveTo(landmarks[startIdx][0], landmarks[startIdx][1]);
+                ctx.lineTo(landmarks[endIdx][0], landmarks[endIdx][1]);
+                ctx.stroke();
+            });
+
             // Draw landmarks
             ctx.fillStyle = 'red';
             landmarks.forEach(lm => {
                 ctx.beginPath();
-                ctx.arc(lm[0], lm[1], 5, 0, 2 * Math.PI);
+                ctx.arc(lm[0], lm[1], 4, 0, 2 * Math.PI);
                 ctx.fill();
             });
 
-            // Optional: Overlay on video
+            // Update video overlay
             video.style.backgroundImage = `url(${canvas.toDataURL()})`;
         }
 
